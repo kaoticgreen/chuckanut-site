@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -14,22 +14,21 @@
             overflow: hidden;
             background-color: #050505;
             cursor: none !important;
-            /* Prevent mobile pull-to-refresh and scrolling */
-            touch-action: none;
+            
+            touch-action: none; 
             -webkit-user-select: none;
             user-select: none;
         }
 
         canvas {
             cursor: none !important;
-            /* Extra safety for touch events on the canvas */
-            touch-action: none;
+            touch-action: none; 
         }
 
         #glcanvas {
             display: block;
             width: 100vw;
-            height: 100vh;
+            height: 100dvh; /* dynamic viewport height prevents mobile URL bar clipping */
         }
 
         #terminal-overlay {
@@ -59,29 +58,23 @@
         }
 
         @keyframes blink {
-            0%, 100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0;
-            }
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
         }
 
-        /* Procedural cursor canvas */
         #cursor-canvas {
             position: fixed;
             top: 0;
             left: 0;
             width: 64px;
             height: 64px;
-            pointer-events: none;
+            pointer-events: none; 
             z-index: 9999;
             transform-origin: 32px 32px;
             will-change: transform;
         }
 
-        /* Intelligently hide the custom cursor on touchscreens */
+        /* Hide the custom cursor on touchscreens */
         @media (pointer: coarse) {
             #cursor-canvas {
                 display: none !important;
@@ -96,95 +89,96 @@
     <canvas id="cursor-canvas" width="64" height="64"></canvas>
 
     <script>
-        // 1. Main CRT shader setup
+        // ==========================================
+        // 1. MAIN CRT WEBGL SETUP
+        // ==========================================
         const canvas = document.getElementById('glcanvas');
         const gl = canvas.getContext('webgl');
 
         const vsSource = `
-                                attribute vec2 aPosition;
-                                varying vec2 vUv;
-                                void main() {
-                                    vUv = aPosition * 0.5 + 0.5;
-                                    vUv.y = 1.0 - vUv.y;
-                                    gl_Position = vec4(aPosition, 0.0, 1.0);
-                                }
-                    `;
+                    attribute vec2 aPosition;
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = aPosition * 0.5 + 0.5;
+                        vUv.y = 1.0 - vUv.y;
+                        gl_Position = vec4(aPosition, 0.0, 1.0);
+                    }
+        `;
 
         const fsSource = `
-                                precision highp float;
+                    precision highp float;
 
-                                varying vec2 vUv;
-                                uniform sampler2D uLogo;
-                                uniform sampler2D uText;
-                                uniform vec2 uResolution;
-                                uniform vec2 uImageResolution;
-                                uniform vec2 uMousePos;
-                                uniform float uTime;
+                    varying vec2 vUv;
+                    uniform sampler2D uLogo;
+                    uniform sampler2D uText;
+                    uniform vec2 uResolution;
+                    uniform vec2 uImageResolution;
+                    uniform vec2 uMousePos;
+                    uniform float uTime;
 
-                                const float CRT_CURVATURE = 1.05;
-                                // Dialed back sensitivity for a heavier feel
-                                const float SENSITIVITY = 300.0;
-                                const float PERSPECTIVE_AMOUNT = 0.8;
-                                const float MAX_TILT = 1.0;
-                                const vec3 AMBER = vec3(1.0, 0.65, 0.1);
+                    const float CRT_CURVATURE = 1.05;
+                    const float SENSITIVITY = 300.0;
+                    const float PERSPECTIVE_AMOUNT = 0.8;
+                    const float MAX_TILT = 1.0;
+                    const vec3 AMBER = vec3(1.0, 0.65, 0.1);
 
-                                vec2 curve(vec2 uv) {
-                                    uv = uv * 2.0 - 1.0;
-                                    float r = length(uv);
-                                    float theta = atan(uv.y, uv.x);
-                                    r = pow(r, CRT_CURVATURE);
-                                    uv.x = r * cos(theta);
-                                    uv.y = r * sin(theta);
-                                    return (uv + 1.0) / 2.0;
-                                }
+                    vec2 curve(vec2 uv) {
+                        uv = uv * 2.0 - 1.0;
+                        float r = length(uv);
+                        float theta = atan(uv.y, uv.x);
+                        r = pow(r, CRT_CURVATURE);
+                        uv.x = r * cos(theta);
+                        uv.y = r * sin(theta);
+                        return (uv + 1.0) / 2.0;
+                    }
 
-                                void main() {
-                                    vec2 curvedUv = curve(vUv);
+                    void main() {
+                        vec2 curvedUv = curve(vUv);
 
-                                    if (curvedUv.x < 0.0 || curvedUv.x > 1.0 || curvedUv.y < 0.0 || curvedUv.y > 1.0) {
-                                        gl_FragColor = vec4(0.01, 0.01, 0.01, 1.0);
-                                        return;
-                                    }
+                        if (curvedUv.x < 0.0 || curvedUv.x > 1.0 || curvedUv.y < 0.0 || curvedUv.y > 1.0) {
+                            gl_FragColor = vec4(0.01, 0.01, 0.01, 1.0);
+                            return;
+                        }
 
-                                    vec2 centerPixel = uResolution * 0.5;
-                                    vec2 tilt = (uMousePos - centerPixel) / SENSITIVITY;
-                                    tilt = clamp(tilt, -MAX_TILT, MAX_TILT);
+                        vec2 centerPixel = uResolution * 0.5;
+                        vec2 tilt = (uMousePos - centerPixel) / SENSITIVITY;
+                        tilt = clamp(tilt, -MAX_TILT, MAX_TILT);
 
-                                    vec2 nativeScale = uResolution / uImageResolution;
-                                    vec2 centeredScreenUv = curvedUv - 0.5;
+                        vec2 nativeScale = uResolution / uImageResolution;
+                        vec2 centeredScreenUv = curvedUv - 0.5;
 
-                                    float z = dot(centeredScreenUv, vec2(tilt.x, -tilt.y));
-                                    vec2 projectedUv = centeredScreenUv / (1.0 - z * PERSPECTIVE_AMOUNT);
-                                    vec2 finalLogoUv = projectedUv * nativeScale + 0.5;
+                        float z = dot(centeredScreenUv, vec2(tilt.x, -tilt.y));
+                        vec2 projectedUv = centeredScreenUv / (1.0 - z * PERSPECTIVE_AMOUNT);
+                        vec2 finalLogoUv = projectedUv * nativeScale + 0.5;
 
-                                    vec4 logoColor = vec4(0.0);
-                                    if (finalLogoUv.x >= 0.0 && finalLogoUv.x <= 1.0 && finalLogoUv.y >= 0.0 && finalLogoUv.y <= 1.0) {
-                                        logoColor = texture2D(uLogo, finalLogoUv);
-                                    }
+                        vec4 logoColor = vec4(0.0);
+                        if (finalLogoUv.x >= 0.0 && finalLogoUv.x <= 1.0 && finalLogoUv.y >= 0.0 && finalLogoUv.y <= 1.0) {
+                            logoColor = texture2D(uLogo, finalLogoUv);
+                        }
 
-                                    vec4 textLayer = texture2D(uText, curvedUv);
-                                    float logoLum = dot(logoColor.rgb, vec3(0.299, 0.587, 0.114));
+                        vec4 textLayer = texture2D(uText, curvedUv);
+                        float logoLum = dot(logoColor.rgb, vec3(0.299, 0.587, 0.114));
 
-                                    vec3 bgColor = AMBER * 0.04;
-                                    vec3 finalColor = mix(bgColor, AMBER * logoLum, logoColor.a);
-                                    finalColor = mix(finalColor, AMBER * 1.5, textLayer.a);
+                        vec3 bgColor = AMBER * 0.04;
+                        vec3 finalColor = mix(bgColor, AMBER * logoLum, logoColor.a);
+                        finalColor = mix(finalColor, AMBER * 1.5, textLayer.a);
 
-                                    vec2 screenSpacePixel = curvedUv * uResolution;
-                                    float maskPattern = sin(screenSpacePixel.x * 3.14159) * sin(screenSpacePixel.y * 3.14159);
-                                    finalColor -= (maskPattern * 0.08);
+                        vec2 screenSpacePixel = curvedUv * uResolution;
+                        float maskPattern = sin(screenSpacePixel.x * 3.14159) * sin(screenSpacePixel.y * 3.14159);
+                        finalColor -= (maskPattern * 0.08);
 
-                                    float scanline = sin(curvedUv.y * 240.0 * 3.14159) * 0.15;
-                                    finalColor -= scanline;
+                        float scanline = sin(curvedUv.y * 240.0 * 3.14159) * 0.15;
+                        finalColor -= scanline;
 
-                                    float distFromCenter = length(curvedUv - 0.5);
-                                    finalColor *= 1.0 - pow(distFromCenter, 2.8);
+                        float distFromCenter = length(curvedUv - 0.5);
+                        finalColor *= 1.0 - pow(distFromCenter, 2.8);
 
-                                    float noise = fract(sin(dot(curvedUv, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
-                                    finalColor -= (noise * 0.05);
+                        float noise = fract(sin(dot(curvedUv, vec2(12.9898, 78.233)) + uTime) * 43758.5453);
+                        finalColor -= (noise * 0.05);
 
-                                    gl_FragColor = vec4(finalColor, 1.0);
-                                }
-                    `;
+                        gl_FragColor = vec4(finalColor, 1.0);
+                    }
+        `;
 
         function createShader(glContext, type, source) {
             const shader = glContext.createShader(type);
@@ -222,13 +216,19 @@
         gl.uniform1i(uLogoLoc, 0);
         gl.uniform1i(uTextLoc, 1);
 
+        // Global Scaling Variables
+        let imgWidth = 1.0;
+        let imgHeight = 1.0;
+        let renderW = 1.0;
+        let renderH = 1.0;
+        let hitRadius = 300;
+        let dynamicFontSize = 24;
+
         const logoTexture = gl.createTexture();
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, logoTexture);
         gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([0, 0, 0, 0]));
 
-        let imgWidth = 1.0;
-        let imgHeight = 1.0;
         const image = new Image();
         image.src = 'logo.png';
         image.onload = () => {
@@ -241,9 +241,14 @@
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
             gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+            
+            // Force math recalculation once native dimensions load
+            resize(); 
         };
 
-        // 2. Text layer set up
+        // ==========================================
+        // 2. TEXT LAYER SETUP
+        // ==========================================
         const textCanvas = document.createElement('canvas');
         const textCtx = textCanvas.getContext('2d');
         const textTexture = gl.createTexture();
@@ -263,7 +268,8 @@
         function drawTextCanvas() {
             textCtx.clearRect(0, 0, textCanvas.width, textCanvas.height);
             textCtx.fillStyle = '#FFFFFF';
-            textCtx.font = '24px "Courier New", Courier, monospace';
+            // Use dynamically calculated scale for font
+            textCtx.font = `${dynamicFontSize}px "Courier New", Courier, monospace`;
             textCtx.textAlign = 'left';
             textCtx.textBaseline = 'top';
 
@@ -274,7 +280,10 @@
 
             if (showCursor) {
                 const textWidth = textCtx.measureText(currentText).width;
-                textCtx.fillRect(padX + textWidth + 4, padY + 2, 14, 24);
+                // Scale cursor size synchronously with font size
+                const cWidth = dynamicFontSize * 0.6;
+                const cHeight = dynamicFontSize;
+                textCtx.fillRect(padX + textWidth + 4, padY + 2, cWidth, cHeight);
             }
         }
 
@@ -285,14 +294,12 @@
             }
         }, 500);
 
-        // Extracted interaction logic to share between mouse click and mobile tap
         function handleInteraction(clientX, clientY) {
             const centerX = window.innerWidth / 2;
             const centerY = window.innerHeight / 2;
             const dist = Math.hypot(clientX - centerX, clientY - centerY);
-
-            const hitRadius = imgWidth > 10 ? (imgWidth * 0.6) : 300;
-
+            
+            // Uses global dynamic hitRadius instead of raw image width
             if (dist < hitRadius) {
                 if (isTyping) return;
                 isTyping = true;
@@ -315,138 +322,140 @@
             handleInteraction(e.clientX, e.clientY);
         });
 
-        // 3. Cursor WebGL Setup
+        // ==========================================
+        // 3. CURSOR WEBGL SETUP
+        // ==========================================
         const cursorCanvas = document.getElementById('cursor-canvas');
         const cgl = cursorCanvas.getContext('webgl', { alpha: true });
 
         const cursorFsSource = `
-                                precision highp float;
-                                uniform float uSquishFactor;
+                    precision highp float;
+                    uniform float uSquishFactor;
 
-                                float sdSegment(vec2 p, vec2 a, vec2 b) {
-                                    vec2 pa = p - a, ba = b - a;
-                                    float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-                                    return length(pa - ba * h);
-                                }
+                    float sdSegment(vec2 p, vec2 a, vec2 b) {
+                        vec2 pa = p - a, ba = b - a;
+                        float h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+                        return length(pa - ba * h);
+                    }
 
-                                float sdArrow(vec2 p) {
-                                    vec2 v0 = vec2(0.0, 0.0);
-                                    vec2 v1 = vec2(0.0, 24.0);
-                                    vec2 v2 = vec2(8.0, 20.0);
-                                    vec2 v3 = vec2(16.0, 28.0);
-                                    vec2 v4 = vec2(16.0, 16.0);
+                    float sdArrow(vec2 p) {
+                        vec2 v0 = vec2(0.0, 0.0);
+                        vec2 v1 = vec2(0.0, 24.0);
+                        vec2 v2 = vec2(8.0, 20.0);
+                        vec2 v3 = vec2(16.0, 28.0);
+                        vec2 v4 = vec2(16.0, 16.0);
 
-                                    float d = sdSegment(p, v0, v1);
-                                    d = min(d, sdSegment(p, v1, v2));
-                                    d = min(d, sdSegment(p, v2, v3));
-                                    d = min(d, sdSegment(p, v3, v4));
-                                    d = min(d, sdSegment(p, v4, v0));
+                        float d = sdSegment(p, v0, v1);
+                        d = min(d, sdSegment(p, v1, v2));
+                        d = min(d, sdSegment(p, v2, v3));
+                        d = min(d, sdSegment(p, v3, v4));
+                        d = min(d, sdSegment(p, v4, v0));
 
-                                    int crossCount = 0;
-                                    if (((v0.y <= p.y) && (v1.y > p.y)) || ((v1.y <= p.y) && (v0.y > p.y))) {
-                                        float vt = (p.y - v0.y) / (v1.y - v0.y);
-                                        if (p.x < v0.x + vt * (v1.x - v0.x)) crossCount++;
-                                    }
-                                    if (((v1.y <= p.y) && (v2.y > p.y)) || ((v2.y <= p.y) && (v1.y > p.y))) {
-                                        float vt = (p.y - v1.y) / (v2.y - v1.y);
-                                        if (p.x < v1.x + vt * (v2.x - v1.x)) crossCount++;
-                                    }
-                                    if (((v2.y <= p.y) && (v3.y > p.y)) || ((v3.y <= p.y) && (v2.y > p.y))) {
-                                        float vt = (p.y - v2.y) / (v3.y - v2.y);
-                                        if (p.x < v2.x + vt * (v3.x - v2.x)) crossCount++;
-                                    }
-                                    if (((v3.y <= p.y) && (v4.y > p.y)) || ((v4.y <= p.y) && (v3.y > p.y))) {
-                                        float vt = (p.y - v3.y) / (v4.y - v3.y);
-                                        if (p.x < v3.x + vt * (v4.x - v3.x)) crossCount++;
-                                    }
-                                    if (((v4.y <= p.y) && (v0.y > p.y)) || ((v0.y <= p.y) && (v4.y > p.y))) {
-                                        float vt = (p.y - v4.y) / (v0.y - v4.y);
-                                        if (p.x < v4.x + vt * (v0.x - v4.x)) crossCount++;
-                                    }
+                        int crossCount = 0;
+                        if (((v0.y <= p.y) && (v1.y > p.y)) || ((v1.y <= p.y) && (v0.y > p.y))) {
+                            float vt = (p.y - v0.y) / (v1.y - v0.y);
+                            if (p.x < v0.x + vt * (v1.x - v0.x)) crossCount++;
+                        }
+                        if (((v1.y <= p.y) && (v2.y > p.y)) || ((v2.y <= p.y) && (v1.y > p.y))) {
+                            float vt = (p.y - v1.y) / (v2.y - v1.y);
+                            if (p.x < v1.x + vt * (v2.x - v1.x)) crossCount++;
+                        }
+                        if (((v2.y <= p.y) && (v3.y > p.y)) || ((v3.y <= p.y) && (v2.y > p.y))) {
+                            float vt = (p.y - v2.y) / (v3.y - v2.y);
+                            if (p.x < v2.x + vt * (v3.x - v2.x)) crossCount++;
+                        }
+                        if (((v3.y <= p.y) && (v4.y > p.y)) || ((v4.y <= p.y) && (v3.y > p.y))) {
+                            float vt = (p.y - v3.y) / (v4.y - v3.y);
+                            if (p.x < v3.x + vt * (v4.x - v3.x)) crossCount++;
+                        }
+                        if (((v4.y <= p.y) && (v0.y > p.y)) || ((v0.y <= p.y) && (v4.y > p.y))) {
+                            float vt = (p.y - v4.y) / (v0.y - v4.y);
+                            if (p.x < v4.x + vt * (v0.x - v4.x)) crossCount++;
+                        }
 
-                                    float s = (mod(float(crossCount), 2.0) == 1.0) ? -1.0 : 1.0;
-                                    return d * s;
-                                }
+                        float s = (mod(float(crossCount), 2.0) == 1.0) ? -1.0 : 1.0;
+                        return d * s;
+                    }
 
-                                float bayer(vec2 p) {
-                                    float x = floor(mod(p.x, 4.0));
-                                    float y = floor(mod(p.y, 4.0));
-                                    float m = x + y * 4.0;
+                    float bayer(vec2 p) {
+                        float x = floor(mod(p.x, 4.0));
+                        float y = floor(mod(p.y, 4.0));
+                        float m = x + y * 4.0;
 
-                                    if (m == 0.0) return 0.0;
-                                    if (m == 1.0) return 8.0/16.0;
-                                    if (m == 2.0) return 2.0/16.0;
-                                    if (m == 3.0) return 10.0/16.0;
+                        if (m == 0.0) return 0.0;
+                        if (m == 1.0) return 8.0/16.0;
+                        if (m == 2.0) return 2.0/16.0;
+                        if (m == 3.0) return 10.0/16.0;
 
-                                    if (m == 4.0) return 12.0/16.0;
-                                    if (m == 5.0) return 4.0/16.0;
-                                    if (m == 6.0) return 14.0/16.0;
-                                    if (m == 7.0) return 6.0/16.0;
+                        if (m == 4.0) return 12.0/16.0;
+                        if (m == 5.0) return 4.0/16.0;
+                        if (m == 6.0) return 14.0/16.0;
+                        if (m == 7.0) return 6.0/16.0;
 
-                                    if (m == 8.0) return 3.0/16.0;
-                                    if (m == 9.0) return 11.0/16.0;
-                                    if (m == 10.0) return 1.0/16.0;
-                                    if (m == 11.0) return 9.0/16.0;
+                        if (m == 8.0) return 3.0/16.0;
+                        if (m == 9.0) return 11.0/16.0;
+                        if (m == 10.0) return 1.0/16.0;
+                        if (m == 11.0) return 9.0/16.0;
 
-                                    if (m == 12.0) return 15.0/16.0;
-                                    if (m == 13.0) return 7.0/16.0;
-                                    if (m == 14.0) return 13.0/16.0;
-                                    if (m == 15.0) return 5.0/16.0;
+                        if (m == 12.0) return 15.0/16.0;
+                        if (m == 13.0) return 7.0/16.0;
+                        if (m == 14.0) return 13.0/16.0;
+                        if (m == 15.0) return 5.0/16.0;
 
-                                    return 0.0;
-                                }
+                        return 0.0;
+                    }
 
-                                void main() {
-                                    vec2 p = gl_FragCoord.xy;
-                                    p.y = 64.0 - p.y;
+                    void main() {
+                        vec2 p = gl_FragCoord.xy;
+                        p.y = 64.0 - p.y;
 
-                                    vec2 localP = p - vec2(32.0, 32.0);
+                        vec2 localP = p - vec2(32.0, 32.0);
 
-                                    float d = sdArrow(localP);
-                                    float dShadow = sdArrow(localP - vec2(4.0, 4.0));
+                        float d = sdArrow(localP);
+                        float dShadow = sdArrow(localP - vec2(4.0, 4.0));
 
-                                    vec4 finalColor = vec4(0.0);
+                        vec4 finalColor = vec4(0.0);
 
-                                    if (dShadow <= 0.0 && d > 0.0) {
-                                        finalColor = vec4(0.0, 0.4, 0.4, 0.5);
-                                    }
+                        if (dShadow <= 0.0 && d > 0.0) {
+                            finalColor = vec4(0.0, 0.4, 0.4, 0.5);
+                        }
 
-                                    if (d <= 0.0) {
-                                        vec4 bodyColor = vec4(1.0, 1.0, 1.0, 1.0);
-                                        vec4 ditherColor = vec4(0.1, 0.1, 0.2, 1.0);
+                        if (d <= 0.0) {
+                            vec4 bodyColor = vec4(1.0, 1.0, 1.0, 1.0);
+                            vec4 ditherColor = vec4(0.1, 0.1, 0.2, 1.0);
 
-                                        vec2 uv = gl_FragCoord.xy / 64.0;
-                                        float dist_x = min(uv.x, 1.0 - uv.x);
-                                        float dist_y = min(uv.y, 1.0 - uv.y);
-                                        float minEdgeDist = min(dist_x, dist_y);
+                            vec2 uv = gl_FragCoord.xy / 64.0;
+                            float dist_x = min(uv.x, 1.0 - uv.x);
+                            float dist_y = min(uv.y, 1.0 - uv.y);
+                            float minEdgeDist = min(dist_x, dist_y);
 
-                                        vec2 smoothTilt = vec2(-10.0, 0.0);
-                                        vec2 centered_uv = uv - 0.5;
-                                        float tiltAlignment = dot(normalize(centered_uv), normalize(smoothTilt));
-                                        float directionalInfluence = (tiltAlignment * 0.5 + 0.5);
+                            vec2 smoothTilt = vec2(-10.0, 0.0);
+                            vec2 centered_uv = uv - 0.5;
+                            float tiltAlignment = dot(normalize(centered_uv), normalize(smoothTilt));
+                            float directionalInfluence = (tiltAlignment * 0.5 + 0.5);
 
-                                        float baseDitherWidth = 0.45 + (uSquishFactor * 1.5);
-                                        float totalDitherWidth = baseDitherWidth + (0.8 * directionalInfluence);
+                            float baseDitherWidth = 0.45 + (uSquishFactor * 1.5);
+                            float totalDitherWidth = baseDitherWidth + (0.8 * directionalInfluence);
 
-                                        float thresh = bayer(gl_FragCoord.xy);
+                            float thresh = bayer(gl_FragCoord.xy);
 
-                                        if (minEdgeDist < totalDitherWidth && totalDitherWidth > 0.001) {
-                                            float intensity = pow(1.0 - (minEdgeDist / totalDitherWidth), 2.0);
-                                            finalColor = (intensity > thresh) ? bodyColor : ditherColor;
-                                        } else {
-                                            finalColor = ditherColor;
-                                        }
-                                    }
+                            if (minEdgeDist < totalDitherWidth && totalDitherWidth > 0.001) {
+                                float intensity = pow(1.0 - (minEdgeDist / totalDitherWidth), 2.0);
+                                finalColor = (intensity > thresh) ? bodyColor : ditherColor;
+                            } else {
+                                finalColor = ditherColor;
+                            }
+                        }
 
-                                    float outlineAlpha = 1.0 - smoothstep(0.0, 1.5, abs(d));
-                                    if (outlineAlpha > 0.0) {
-                                        finalColor.rgb = mix(finalColor.rgb, vec3(0.1, 0.1, 0.2), outlineAlpha);
-                                        finalColor.a = max(finalColor.a, outlineAlpha);
-                                    }
+                        float outlineAlpha = 1.0 - smoothstep(0.0, 1.5, abs(d));
+                        if (outlineAlpha > 0.0) {
+                            finalColor.rgb = mix(finalColor.rgb, vec3(0.1, 0.1, 0.2), outlineAlpha);
+                            finalColor.a = max(finalColor.a, outlineAlpha);
+                        }
 
-                                    gl_FragColor = finalColor;
-                                }
-                    `;
+                        gl_FragColor = finalColor;
+                    }
+        `;
 
         const cursorProgram = cgl.createProgram();
         cgl.attachShader(cursorProgram, createShader(cgl, cgl.VERTEX_SHADER, vsSource));
@@ -463,7 +472,9 @@
 
         const uSquishFactorLoc = cgl.getUniformLocation(cursorProgram, 'uSquishFactor');
 
-        // 4. Event loop and physics (mouse + touch)
+        // ==========================================
+        // 4. EVENT LOOP & PHYSICS (MOUSE + TOUCH)
+        // ==========================================
         let targetMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
         let currentTiltMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
@@ -471,7 +482,6 @@
         let currentCursorScale = 1.0;
         let targetCursorScale = 1.0;
 
-        // Desktop Mouse Events
         window.addEventListener('mousemove', (e) => {
             targetMouse.x = e.clientX;
             targetMouse.y = e.clientY;
@@ -480,7 +490,6 @@
         window.addEventListener('mouseup', () => targetCursorScale = 1.0);
         window.addEventListener('mouseleave', () => targetCursorScale = 1.0);
 
-        // Mobile Touch Events
         window.addEventListener('touchstart', (e) => {
             if (e.touches.length > 0) {
                 targetMouse.x = e.touches[0].clientX;
@@ -506,24 +515,40 @@
             gl.viewport(0, 0, canvas.width, canvas.height);
             textCanvas.width = window.innerWidth;
             textCanvas.height = window.innerHeight;
+            
+            // 1. DYNAMIC LOGO SCALING: Calculate size to keep logo bound to mobile screens
+            // Caps scaling at 1.0 (so it never blows past its native size)
+            const maxAllowedScale = Math.min(
+                (canvas.width * 0.85) / imgWidth, 
+                (canvas.height * 0.60) / imgHeight, 
+                1.0 
+            );
+            
+            renderW = imgWidth * maxAllowedScale;
+            renderH = imgHeight * maxAllowedScale;
+            
+            // 2. DYNAMIC HITBOX: Hit radius is always relative to the rendered logo size
+            hitRadius = renderW > 10 ? (renderW * 0.6) : 300;
+            
+            // 3. DYNAMIC FONT: Font sizes fluidly up and down for mobile readability
+            dynamicFontSize = Math.max(14, Math.min(24, canvas.width * 0.04));
+            
             textDirty = true;
         }
         window.addEventListener('resize', resize);
         resize();
 
         function render(time) {
-            // 1. Render Main CRT Screen
             gl.useProgram(program);
-
+            
             const centerX = canvas.width / 2;
             const centerY = canvas.height / 2;
             const dist = Math.hypot(targetMouse.x - centerX, targetMouse.y - centerY);
-
-            const hitRadius = imgWidth > 10 ? (imgWidth * 0.6) : 300;
-
+            
             let targetTiltX = centerX;
             let targetTiltY = centerY;
 
+            // Restrict tracking to the dynamically calculated hit box
             if (dist < hitRadius) {
                 targetTiltX = targetMouse.x;
                 targetTiltY = targetMouse.y;
@@ -541,19 +566,20 @@
             }
 
             gl.uniform2f(uResolutionLoc, canvas.width, canvas.height);
-            gl.uniform2f(uImageResolutionLoc, imgWidth, imgHeight);
-            gl.uniform2f(uMousePosLoc, currentTiltMouse.x, currentTiltMouse.y);
-            gl.uniform1f(uTimeLoc, time * 0.001);
+            
+            // Pass the safely scaled width and height into the WebGL renderer
+            gl.uniform2f(uImageResolutionLoc, renderW, renderH);
+            gl.uniform2f(uMousePosLoc, currentTiltMouse.x, currentTiltMouse.y); 
+            gl.uniform1f(uTimeLoc, time * 0.001); 
             gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-            // 2. Render Procedural Cursor (Hidden on mobile via CSS, but math continues safely)
             cgl.useProgram(cursorProgram);
-
+            
             let diff = targetCursorScale - currentCursorScale;
-            cursorVel += diff * 0.4;
-            cursorVel *= 0.6;
+            cursorVel += diff * 0.4; 
+            cursorVel *= 0.6; 
             currentCursorScale += cursorVel;
-
+            
             cgl.uniform1f(uSquishFactorLoc, 1.0 - currentCursorScale);
             cgl.drawArrays(cgl.TRIANGLES, 0, 6);
 
