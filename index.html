@@ -87,16 +87,20 @@
     <canvas id="cursor-canvas" width="64" height="64"></canvas>
 
     <script>
-        // 1. Core shader set up
+        // ==========================================
+        // 1. CORE SHADER SETUP (Main CRT Scene)
+        // ==========================================
         const canvas = document.getElementById('glcanvas');
         const gl = canvas.getContext('webgl', { preserveDrawingBuffer: false });
+        
+        // Globally flip DOM images so they match WebGL's bottom-up coordinate system
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
         const vsSource = `
                     attribute vec2 aPosition;
                     varying vec2 vUv;
                     void main() {
                         vUv = aPosition * 0.5 + 0.5;
-                        vUv.y = 1.0 - vUv.y;
                         gl_Position = vec4(aPosition, 0.0, 1.0);
                     }
         `;
@@ -149,11 +153,14 @@
                         vec2 nativeScale = uResolution / uImageResolution;
                         vec2 centeredScreenUv = curvedUv - 0.5;
 
-                        float z = dot(centeredScreenUv, vec2(tilt.x, -tilt.y));
+                        // Adjusted tilt.y to positive to match unflipped UVs
+                        float z = dot(centeredScreenUv, vec2(tilt.x, tilt.y));
                         vec2 projectedUv = centeredScreenUv / (1.0 - z * PERSPECTIVE_AMOUNT);
                         vec2 finalLogoUv = projectedUv * nativeScale + 0.5;
 
-                        // Chromatic Aberration fornElectron misalignment 
+                        // ==========================================
+                        // Chromatic Aberration (Electron Misalignment)
+                        // ==========================================
                         float distFromCenter = length(curvedUv - 0.5);
                         float caOffset = 0.005 * pow(distFromCenter, 2.0); // Escalates near edges
                         
@@ -169,7 +176,9 @@
                         float textG = texture2D(uText, curvedUv).a; // Base alpha is in 'G' layer essentially
                         float textB = texture2D(uText, curvedUv + vec2(caOffset, 0.0)).a;
 
+                        // ==========================================
                         // Phosphor Halation (Deep Glow)
+                        // ==========================================
                         float blur = 0.003;
                         float glow = texture2D(uText, curvedUv + vec2(blur, 0.0)).a +
                                      texture2D(uText, curvedUv - vec2(blur, 0.0)).a +
@@ -177,7 +186,9 @@
                                      texture2D(uText, curvedUv - vec2(0.0, blur)).a + textG;
                         glow = clamp(glow * 0.25, 0.0, 1.0);
 
+                        // ==========================================
                         // Core Composition
+                        // ==========================================
                         float logoLum = dot(logoColor.rgb, vec3(0.299, 0.587, 0.114));
                         vec3 finalColor = mix(AMBER * 0.04, AMBER * logoLum, logoColor.a);
                         
@@ -190,7 +201,9 @@
                         finalColor += AMBER * glow * 1.2;
                         finalColor += vec3(textR * 0.8, 0.0, textB * 0.8) * 0.4; // Text CA fringing
 
+                        // ==========================================
                         // Texture & Glass Simulation
+                        // ==========================================
                         vec2 screenPixel = curvedUv * uResolution;
                         finalColor -= (sin(screenPixel.x * 3.14159) * sin(screenPixel.y * 3.14159) * 0.08); // Mask
                         finalColor -= sin(curvedUv.y * 240.0 * 3.14159) * 0.15; // Scanlines
@@ -246,7 +259,9 @@
         gl.uniform1i(uTextLoc, 1);
         gl.uniform1i(uPreviousLoc, 2);
 
-        // 2. FBO Setup for Persistence/Ping-Pong
+        // ==========================================
+        // 2. FBO SETUP (For Persistence/Ping-Pong)
+        // ==========================================
         const copyVsSource = `
             attribute vec2 aPosition;
             varying vec2 vUv;
@@ -316,7 +331,9 @@
             resize(); 
         };
 
-        // 3. Text set up
+        // ==========================================
+        // 3. TEXT LAYER SETUP
+        // ==========================================
         const textCanvas = document.createElement('canvas');
         const textCtx = textCanvas.getContext('2d');
         const textTexture = gl.createTexture();
@@ -385,7 +402,9 @@
 
         window.addEventListener('click', (e) => handleInteraction(e.clientX, e.clientY));
 
-        // 4. Cursor set up
+        // ==========================================
+        // 4. CUSTOM CURSOR SETUP
+        // ==========================================
         const cursorCanvas = document.getElementById('cursor-canvas');
         const cgl = cursorCanvas.getContext('webgl', { alpha: true });
 
@@ -502,7 +521,9 @@
 
         const uSquishFactorLoc = cgl.getUniformLocation(cursorProgram, 'uSquishFactor');
 
-        // 5. Input and event loop
+        // ==========================================
+        // 5. INPUT & EVENT LOOP
+        // ==========================================
         let targetMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
         let currentTiltMouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
 
@@ -584,7 +605,7 @@
                 textDirty = false;
             }
 
-            // Pass 1 to Render CRT Scene into Ping FBO
+            // --- PASS 1: Render CRT Scene into Ping FBO ---
             gl.bindFramebuffer(gl.FRAMEBUFFER, pingFBO.fbo);
             gl.useProgram(program);
 
@@ -603,7 +624,7 @@
             
             gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-            // Pass 2 to Copy Ping FBO to Final Screen Canvas
+            // --- PASS 2: Copy Ping FBO to Final Screen Canvas ---
             gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             gl.useProgram(copyProgram);
 
@@ -617,12 +638,12 @@
 
             gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-            // Ping-Pong Swap for Next Frame
+            // --- Ping-Pong Swap for Next Frame ---
             const temp = pingFBO;
             pingFBO = pongFBO;
             pongFBO = temp;
 
-            // Cursor Context Update
+            // --- Cursor Context Update ---
             cgl.useProgram(cursorProgram);
             let diff = targetCursorScale - currentCursorScale;
             cursorVel += diff * 0.4; cursorVel *= 0.6; currentCursorScale += cursorVel;
