@@ -515,7 +515,7 @@
         };
 
         // ============================================================================
-        // 3. Multiline Text & Transition State Machine
+        // 3. Commodore 64 BASIC V2 Compliant Terminal & Transition State Machine
         // ============================================================================
         const textCanvas = document.createElement('canvas');
         const textCtx = textCanvas.getContext('2d');
@@ -528,13 +528,26 @@
         gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
         let textDirty = true;
-        let charIndex = 0;
-
-        // Updated BASIC message ending on 30 RUN 100
-        const typeMessage = "10 CLS\n20 PRINT \"EST. 2025\"\n30 LOAD \"SATOYAMADICE\", 8\n40 RUN";
-
+        let terminalBuffer = "";
         let showCursor = true;
         let isTyping = false;
+
+        // Authentic Commodore 64 BASIC V2 Execution Steps:
+        // - Uses CHR$(147) instead of non-existent CLS
+        // - Executes RUN in direct mode (clearing the screen via CHR$(147) and printing "EST. 2025")
+        // - Loads from IEC device 8 with secondary address 1 (LOAD"SATOYAMADICE",8,1)
+        // - Simulates real C64 KERNAL disk drive responses before typing RUN
+        const c64Steps = [
+            { type: 'type', text: '10 PRINT CHR$(147);\n', postDelay: 250 },
+            { type: 'type', text: '20 PRINT "EST. 2025"\n', postDelay: 300 },
+            { type: 'type', text: 'RUN\n', postDelay: 200 },
+            { type: 'clear_and_out', text: 'EST. 2025\n\nREADY.\n', postDelay: 550 },
+            { type: 'type', text: 'LOAD"SATOYAMADICE",8,1\n', postDelay: 300 },
+            { type: 'out', text: '\nSEARCHING FOR SATOYAMADICE', postDelay: 600 },
+            { type: 'out', text: '\nLOADING', postDelay: 850 },
+            { type: 'out', text: '\nREADY.\n', postDelay: 350 },
+            { type: 'type', text: 'RUN', postDelay: 400 }
+        ];
 
         // Transition State Variables (matching sd_transition_manager.lua)
         let isTransitioning = false;
@@ -571,8 +584,7 @@
             const padX = textCanvas.width * 0.06;
             const padY = textCanvas.height * 0.08;
 
-            const currentText = typeMessage.substring(0, charIndex);
-            const lines = currentText.split('\n');
+            const lines = terminalBuffer.split('\n');
             const lineHeight = dynamicFontSize * 1.5;
 
             // Draw each line progressively down the Y-axis
@@ -599,6 +611,55 @@
             }
         }, 500);
 
+        function runC64Sequence() {
+            let stepIdx = 0;
+            let charIdx = 0;
+            terminalBuffer = "";
+            textDirty = true;
+
+            function nextAction() {
+                if (stepIdx >= c64Steps.length) {
+                    isTyping = false;
+                    startTransition();
+                    return;
+                }
+
+                const step = c64Steps[stepIdx];
+
+                if (step.type === 'type') {
+                    if (charIdx < step.text.length) {
+                        terminalBuffer += step.text[charIdx];
+                        charIdx++;
+                        showCursor = true;
+                        textDirty = true;
+                        setTimeout(nextAction, 75 + Math.random() * 85);
+                    } else {
+                        stepIdx++;
+                        charIdx = 0;
+                        setTimeout(nextAction, step.postDelay);
+                    }
+                } else if (step.type === 'clear_and_out') {
+                    // Simulates CHR$(147) clearing the C64 screen and printing program output
+                    terminalBuffer = step.text;
+                    showCursor = true;
+                    textDirty = true;
+                    stepIdx++;
+                    charIdx = 0;
+                    setTimeout(nextAction, step.postDelay);
+                } else if (step.type === 'out') {
+                    // Simulates instant C64 KERNAL / 1541 disk drive status messages
+                    terminalBuffer += step.text;
+                    showCursor = true;
+                    textDirty = true;
+                    stepIdx++;
+                    charIdx = 0;
+                    setTimeout(nextAction, step.postDelay);
+                }
+            }
+
+            nextAction();
+        }
+
         function handleInteraction(clientX, clientY) {
             if (isTransitioning || transitionComplete) return;
 
@@ -613,20 +674,7 @@
                 unlockMediaOnUserGesture();
 
                 isTyping = true;
-                charIndex = 0;
-                function typeNext() {
-                    if (charIndex < typeMessage.length) {
-                        charIndex++;
-                        showCursor = true;
-                        textDirty = true;
-                        setTimeout(typeNext, 150 + Math.random() * 200);
-                    } else {
-                        isTyping = false;
-                        // Brief pause after typing "30 RUN 100" before executing the screen swipe
-                        setTimeout(startTransition, 400);
-                    }
-                }
-                typeNext();
+                runC64Sequence();
             }
         }
 
